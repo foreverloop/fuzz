@@ -1,7 +1,7 @@
 import random
 import numpy as np
 import pandas as pd
-from scipy.spatial import distance
+#from scipy.spatial import distance
 from sklearn.preprocessing import MinMaxScaler
 
 class fuzzy_c_means:
@@ -20,7 +20,7 @@ class fuzzy_c_means:
         return np.asarray(calculated_weights)
 
     #uses get_data_weights to get column weights, use these alongside the data points to classify points into clusters
-    def get_cluster_weights(self, data_points, data_weights, n_cols):
+    def get_cluster_centroids(self, data_points, data_weights, n_cols):
         '''
         get weights for each cluster for each column of weights
         intuitively, this makes sense, since column weights hold information
@@ -32,11 +32,32 @@ class fuzzy_c_means:
         for j in range(self.n_clusters):
             weight_results = []
             for point, weight in zip(data_points,data_weights[:,j]):
-                weight_results.append((weight ** self.m_fuzziness) * point)
+                weight_results.append(((weight ** self.m_fuzziness) * point) / result_col_weights[j])
 
             cluster_weights.append(sum((weight_results)))
 
         return np.asarray(cluster_weights)
+
+    def update_membership_weights(self, data_points, cluster_centroids):
+
+        #exponent to raise distance calculation to for later finding weights
+        fuzzy_power = 1 / (self.m_fuzziness - 1)
+
+        recalculated_weights = []
+        #for each data point
+        for z in data_points:
+            #for each cluster cenroid
+            data_point_centroids_to_sum = []
+            data_point_weights = []
+            for idx,x in enumerate(cluster_centroids):
+                if idx == 0:
+                    alpha = 1 / np.linalg.norm(z-x) ** fuzzy_power
+                data_point_centroids_to_sum.append(1 / np.linalg.norm(z-x) ** fuzzy_power)
+                cluster_x_data_weight = alpha / sum(data_point_centroids_to_sum) ** fuzzy_power
+                data_point_weights.append(cluster_x_data_weight)
+            recalculated_weights.append(data_point_weights)
+        #print(recalculated_weights)
+        return np.asarray(recalculated_weights)
 
     #fit data points using the fuzzy algorithm
     def fit(self, data_points):
@@ -57,8 +78,9 @@ class fuzzy_c_means:
         #start by selecting indexes to choose the random data points from
         idx = np.random.choice(data_points.shape[0], self.n_clusters, replace=False)
         self.c_means = data_points[idx]
-        cluster_weights = self.get_cluster_weights(data_points, random_initial_weights, n_cols)
-
+        cluster_centroids = self.get_cluster_centroids(data_points, random_initial_weights, n_cols)
+        self.update_membership_weights(data_points, cluster_centroids)
+        
         return 0
 
 if __name__ == "__main__":
