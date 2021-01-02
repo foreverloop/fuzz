@@ -1,6 +1,7 @@
 import random
 import numpy as np
 import pandas as pd
+from scipy.spatial import distance
 from sklearn.preprocessing import MinMaxScaler
 
 class fuzzy_c_means:
@@ -11,20 +12,30 @@ class fuzzy_c_means:
         self.epsilon_stopping = epsilon_stopping
         self.c_means = None
 
-    #compute weight for a point x_i relative to cluster c_j
-    def get_point_weight():
-        return 0
+    #use fuzzy hyper parameter to calculate weights for the clusters using the data
+    def get_data_weights(self, data_weights, n_cols):
+        calculated_weights = []
+        for j in range(self.n_clusters):
+            calculated_weights.append(np.sum(np.power(data_weights[:,j], self.m_fuzziness)))
+        return np.asarray(calculated_weights)
 
-    #compute cluster c_j
-    def get_cluster():
-        return 0
-
-    #use fuzzy hyper parameter to calculate cluster weight
-    def get_cluster_weights(self, data_points):
+    #uses get_data_weights to get column weights, use these alongside the data points to classify points into clusters
+    def get_cluster_weights(self, data_points, data_weights, n_cols):
+        '''
+        get weights for each cluster for each column of weights
+        intuitively, this makes sense, since column weights hold information
+        about how __likely__ data in this column belongs to any particular cluster
+        '''
+        result_col_weights = self.get_data_weights(data_weights, n_cols)
         cluster_weights = []
-        for i in range(self.n_clusters):
-            #clusters vs columns? do we need for n clusters or n columns?
-            cluster_weights.append(np.sum(np.power(data_points[:,i], self.m_fuzziness)))
+
+        for j in range(self.n_clusters):
+            weight_results = []
+            for point, weight in zip(data_points,data_weights[:,j]):
+                weight_results.append((weight ** self.m_fuzziness) * point)
+
+            cluster_weights.append(sum((weight_results)))
+
         return np.asarray(cluster_weights)
 
     #fit data points using the fuzzy algorithm
@@ -35,21 +46,19 @@ class fuzzy_c_means:
         and number of columns equal to the number of clusters requested
         and each row's elements sum to 1
         '''
-        random_initial_matrix = np.random.rand(len(data_points),self.n_clusters)
-        random_initial_matrix = np.apply_along_axis(lambda x: x - (np.sum(x) - 1)/len(x),
-        1, random_initial_matrix)
+        #get number of rows and columns
+        n_rows, n_cols = np.shape(data_points)
+
+        random_initial_weights = np.random.rand(len(data_points),self.n_clusters)
+        random_initial_weights = np.apply_along_axis(lambda x: x - (np.sum(x) - 1)/len(x),
+        1, random_initial_weights)
 
         #select an initial guess at centroids of n_clusters, number of clusters
         #start by selecting indexes to choose the random data points from
         idx = np.random.choice(data_points.shape[0], self.n_clusters, replace=False)
         self.c_means = data_points[idx]
-        cluster_weights = self.get_cluster_weights(data_points)
-        print(cluster_weights)
-        #self.c_means = np.random.choice(data_points,1)[0]
-        #self.c_means = random.sample(data_points.tolist(),self.n_clusters)
-        print(self.c_means)
-        print(random_initial_matrix[:10])
-        #self.c_means = random.sample(points.tolist(),self.n_clusters)
+        cluster_weights = self.get_cluster_weights(data_points, random_initial_weights, n_cols)
+
         return 0
 
 if __name__ == "__main__":
