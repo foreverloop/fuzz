@@ -1,7 +1,6 @@
 import random
 import numpy as np
 import pandas as pd
-#from scipy.spatial import distance
 from sklearn.preprocessing import MinMaxScaler
 
 class fuzzy_c_means:
@@ -41,9 +40,9 @@ class fuzzy_c_means:
     def update_membership_weights(self, data_points, cluster_centroids):
 
         #exponent to raise distance calculation to for later finding weights
-        fuzzy_power = 1 / (self.m_fuzziness - 1)
-
+        fuzzy_power = int(1 / (self.m_fuzziness - 1))
         recalculated_weights = []
+
         #for each data point
         for z in data_points:
             #for each cluster cenroid
@@ -51,13 +50,20 @@ class fuzzy_c_means:
             data_point_weights = []
             for idx,x in enumerate(cluster_centroids):
                 if idx == 0:
-                    alpha = 1 / np.linalg.norm(z-x) ** fuzzy_power
-                data_point_centroids_to_sum.append(1 / np.linalg.norm(z-x) ** fuzzy_power)
-                cluster_x_data_weight = alpha / sum(data_point_centroids_to_sum) ** fuzzy_power
+                    alpha = 1 / (np.linalg.norm(x-z) ** fuzzy_power)
+                data_point_centroids_to_sum.append(np.linalg.norm(x-z) ** fuzzy_power)
+                cluster_x_data_weight = alpha / (1 / (sum(data_point_centroids_to_sum) ** fuzzy_power))
                 data_point_weights.append(cluster_x_data_weight)
             recalculated_weights.append(data_point_weights)
-        #print(recalculated_weights)
+        print(recalculated_weights)
         return np.asarray(recalculated_weights)
+
+    #sort into clusters based on weights
+    def assign_clusters(self, weights):
+        classified_points = []
+        for i in weights:
+            classified_points.append(np.argmax(i,axis=0))
+        return classified_points
 
     #fit data points using the fuzzy algorithm
     def fit(self, data_points):
@@ -71,17 +77,29 @@ class fuzzy_c_means:
         n_rows, n_cols = np.shape(data_points)
 
         random_initial_weights = np.random.rand(len(data_points),self.n_clusters)
-        random_initial_weights = np.apply_along_axis(lambda x: x - (np.sum(x) - 1)/len(x),
-        1, random_initial_weights)
+        random_initial_weights = np.apply_along_axis(lambda x: x - (np.sum(x) - 1) / len(x), 1, random_initial_weights)
 
         #select an initial guess at centroids of n_clusters, number of clusters
         #start by selecting indexes to choose the random data points from
-        idx = np.random.choice(data_points.shape[0], self.n_clusters, replace=False)
+        idx = np.random.choice(data_points.shape[0], self.n_clusters, replace = False)
         self.c_means = data_points[idx]
-        cluster_centroids = self.get_cluster_centroids(data_points, random_initial_weights, n_cols)
-        self.update_membership_weights(data_points, cluster_centroids)
-        
-        return 0
+
+        classified_points_initial = self.assign_clusters(random_initial_weights)
+        classified_points_new = []
+
+        max_iter = 200
+        count = 0
+        while classified_points_initial != classified_points_new:
+            if count == max_iter:
+                break
+            else:
+                count += 1
+                cluster_centroids = self.get_cluster_centroids(data_points, random_initial_weights, n_cols)
+                new_weights = self.update_membership_weights(data_points, cluster_centroids)
+                classified_points_new = self.assign_clusters(new_weights)
+        #print(classified_points_initial)
+        #print('-----------------------')
+        #print(classified_points_new)
 
 if __name__ == "__main__":
     df_wine = pd.read_csv('wine_clean.csv')
