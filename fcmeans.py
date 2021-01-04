@@ -1,16 +1,19 @@
 import random
+import warnings
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from sklearn.preprocessing import MinMaxScaler
+warnings.filterwarnings("error")
 
 class fuzzy_c_means:
 
-    def __init__(self, n_clusters, m_fuzziness = 2, epsilon_stopping = 0.05, max_iter = 500):
+    def __init__(self, n_clusters = 3, m_fuzziness = 2, epsilon_stopping = 0.001, max_iter = 500):
         self.n_clusters = n_clusters
         self.m_fuzziness = m_fuzziness
         self.epsilon_stopping = epsilon_stopping
         self.max_iter = max_iter
+        self.cluster_weights = None
         self.cluster_classes = None
 
     def get_cluster_centroids(self, data_points, data_weights):
@@ -26,15 +29,21 @@ class fuzzy_c_means:
         return np.asarray(cluster_centroids)
 
     def update_membership_weights(self, data_points, cluster_centroids):
-
+        fuzzy_power = 1 / (self.m_fuzziness - 1)
         #empty list, later will hold results format [w_1,w_...,w_n] for all data points
         recalculated_weights = []
         #for each data point
         for z in data_points:
             #each data point will have it's own cluster weights, calculate them as distance from centroids
-            data_point_weights = [1 / (np.linalg.norm(x-z)) for x in cluster_centroids]
+            try:
+                data_point_weights = [1 / (np.linalg.norm(x-z)) for x in cluster_centroids]
+            except RuntimeWarning:
+                #print("runtime warning occured: np.linalg.norm returned 0 (same data point means distance == 0)")
+                #set the weight to the average so it doesn't mess up the result
+                data_point_weights = [1/self.n_clusters for _ in range(self.n_clusters)]
+
             #finish the weight calculations by using each distance over the sum of all other distances
-            finished_weights = [x / (sum(data_point_weights)) for x in data_point_weights]
+            finished_weights = [x / (sum(data_point_weights) ** fuzzy_power) for x in data_point_weights]
 
             #needs to be an (number_of_rows, cluster_size) shape matrix
             recalculated_weights.append(finished_weights)
@@ -50,11 +59,13 @@ class fuzzy_c_means:
     def fit(self, data_points):
         #initialise a matrix same length as input data, and width of number of clusters
         cluster_weights = np.random.rand(len(data_points),self.n_clusters)
+
         #ensure values in the row always sum up to 1
         cluster_weights = np.apply_along_axis(lambda x: x - (np.sum(x) - 1) / len(x), 1, cluster_weights)
 
         #assign the points to clusters using the random initial weights (just a starting point)
         classified_points_initial = self.assign_clusters(cluster_weights)
+
         #declare a holder for points outside the iteration loop
         classified_points_new = []
 
@@ -83,22 +94,29 @@ class fuzzy_c_means:
         self.cluster_centroids = cluster_centroids
 
 if __name__ == "__main__":
-    #load in and prepare data
+    #load in and prepare data and set output options
     df_wine = pd.read_csv('wine_clean.csv')
     wine_labels = df_wine['wine type'].tolist()
     df_wine[df_wine.columns] = MinMaxScaler().fit_transform(df_wine[df_wine.columns])
-
+    np.set_printoptions(suppress=True)
+    np.set_printoptions(precision=3)
     #fuzziness is inverse, with higher number making crisper clusters (can easily change calc to make it work in standard)
-    my_fuzzy = fuzzy_c_means(n_clusters = 3, m_fuzziness = 9, epsilon_stopping = 0.01)
+    my_fuzzy = fuzzy_c_means(n_clusters = int(input("number clusters: ")), m_fuzziness = int(input("fuzziness: ")), epsilon_stopping = 0.001)
     #my_fuzzy.fit(df_wine[['Malic acid','Color intensity','Alcalinity of ash','Flavanoids']].values)
     my_fuzzy.fit(df_wine[['Malic acid','Color intensity']].values)
 
     print("centroids: ",my_fuzzy.cluster_centroids)
     centroids_np = np.asarray(my_fuzzy.cluster_centroids)
+
+    print(my_fuzzy.cluster_weights)
     #plot the original cluster labels
     plt.scatter(df_wine['Malic acid'], df_wine['Color intensity'], c = wine_labels)
     plt.show()
     #plot the fuzzy labels
-    plt.scatter(centroids_np[:,0], centroids_np[:,1], color="orangered")
+    my_markers = [u'x', u'+', u'o']
+    s_markers = [my_markers[i] for i in my_fuzzy.cluster_classes]
+    plt.scatter(centroids_np[:,0], centroids_np[:,1], s = 500 , color = "orangered")
     plt.scatter(df_wine['Malic acid'], df_wine['Color intensity'], c = my_fuzzy.cluster_classes)
+    #for _x, _y, c, _s in zip(df_wine['Malic acid'], df_wine['Color intensity'], my_fuzzy.cluster_classes, s_markers):
+    #    plt.scatter(_x, _y, marker=_s, c=c)
     plt.show()
