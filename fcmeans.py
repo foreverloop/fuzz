@@ -17,14 +17,19 @@ class fuzzy_c_means:
         self.cluster_classes = None
 
     def get_cluster_centroids(self, data_points, data_weights):
-
         cluster_centroids = []
 
         for j in range(self.n_clusters):
+            weight_results_point = []
             weight_results = []
             for point, weight in zip(data_points,data_weights[:,j]):
-                weight_results.append(((weight ** self.m_fuzziness) * point))
-            cluster_centroids.append(sum(weight_results) / np.sum(np.power(data_weights[:,j], self.m_fuzziness)))
+                #only a problem on first iteration, due to random weights could possibly be below 0
+                if weight < 0:
+                    print("preventing random initial negative weight {0}".format(weight,self.m_fuzziness))
+                    weight = weight * -1
+                weight_results_point.append(((weight ** self.m_fuzziness) * point))
+                weight_results.append(weight ** self.m_fuzziness)
+            cluster_centroids.append(sum(weight_results_point) / sum(weight_results))
 
         return np.asarray(cluster_centroids)
 
@@ -36,17 +41,16 @@ class fuzzy_c_means:
         for z in data_points:
             #each data point will have it's own cluster weights, calculate them as distance from centroids
             try:
-                data_point_weights = [(1 / (np.linalg.norm(x-z))) for x in cluster_centroids]
+                data_point_weights = [(1 / (np.linalg.norm(x-z)) ** fuzzy_power) for x in cluster_centroids]
             except RuntimeWarning:
-                #print("runtime warning occured: np.linalg.norm returned 0 (same data point means distance == 0)")
+                print("runtime warning occured: np.linalg.norm returned 0 (same data point means distance == 0)")
                 #set the weight to the average so it doesn't mess up the result
                 data_point_weights = [1/self.n_clusters for _ in range(self.n_clusters)]
 
             #finish the weight calculations by using each distance over the sum of all other distances
-            finished_weights = [x / (sum(data_point_weights)) ** fuzzy_power for x in data_point_weights]
+            finished_weights = [x / sum(data_point_weights) for x in data_point_weights]
             #needs to be an (number_of_rows, cluster_size) shape matrix
             recalculated_weights.append(finished_weights)
-
         #return the recalculated weights as a numpy array
         return np.asarray(recalculated_weights)
 
@@ -99,8 +103,8 @@ if __name__ == "__main__":
     df_wine[df_wine.columns] = MinMaxScaler().fit_transform(df_wine[df_wine.columns].values)
     np.set_printoptions(suppress=True)
     np.set_printoptions(precision=3)
-    #fuzziness is inverse, with higher number making crisper clusters (can easily change calc to make it work in standard)
-    my_fuzzy = fuzzy_c_means(n_clusters = 3, m_fuzziness = 9, epsilon_stopping = 0.001)
+
+    my_fuzzy = fuzzy_c_means(n_clusters = 3, m_fuzziness = 2, epsilon_stopping = 0.001)
     #my_fuzzy.fit(df_wine[['Malic acid','Color intensity','Alcalinity of ash','Flavanoids']].values)
     my_fuzzy.fit(df_wine[['Malic acid','Color intensity']].values)
 
