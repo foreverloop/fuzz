@@ -28,6 +28,11 @@ class fuzzy_c_means:
 
         return np.asarray(cluster_centroids)
 
+    def update_new_weights(self, data_points, cluster_centroids):
+        fuzzy_power = 1 / (self.m_fuzziness - 1)
+        recalculated_weights = []
+        return np.asarray(recalculated_weights)
+
     def update_membership_weights(self, data_points, cluster_centroids):
         fuzzy_power = 1 / (self.m_fuzziness - 1)
         #empty list, later will hold results format [w_1,w_...,w_n] for all data points
@@ -36,14 +41,14 @@ class fuzzy_c_means:
         for z in data_points:
             #each data point will have it's own cluster weights, calculate them as distance from centroids
             try:
-                data_point_weights = [(1 / (np.linalg.norm(x-z))) for x in cluster_centroids]
+                data_point_weights = [1 / (np.linalg.norm(x-z)) for x in cluster_centroids]
             except RuntimeWarning:
                 #print("runtime warning occured: np.linalg.norm returned 0 (same data point means distance == 0)")
                 #set the weight to the average so it doesn't mess up the result
                 data_point_weights = [1/self.n_clusters for _ in range(self.n_clusters)]
 
             #finish the weight calculations by using each distance over the sum of all other distances
-            finished_weights = [x / (sum(data_point_weights)) ** fuzzy_power for x in data_point_weights]
+            finished_weights = [x / (sum(data_point_weights) ** fuzzy_power) for x in data_point_weights]
             #needs to be an (number_of_rows, cluster_size) shape matrix
             recalculated_weights.append(finished_weights)
 
@@ -84,7 +89,8 @@ class fuzzy_c_means:
             #store the centroids calculated so they can be compared with new ones calculated next iteration
             old_centroids = cluster_centroids
             #update cluster membership weights
-            cluster_weights = self.update_membership_weights(data_points, cluster_centroids)
+            #cluster_weights = self.update_membership_weights(data_points, cluster_centroids)
+            cluster_weights = self.update_new_weights(data_points, cluster_centroids)
             #assign the data points to clusters using the weights
             classified_points_new = self.assign_clusters(cluster_weights)
 
@@ -100,7 +106,7 @@ if __name__ == "__main__":
     np.set_printoptions(suppress=True)
     np.set_printoptions(precision=3)
     #fuzziness is inverse, with higher number making crisper clusters (can easily change calc to make it work in standard)
-    my_fuzzy = fuzzy_c_means(n_clusters = 3, m_fuzziness = 9, epsilon_stopping = 0.001)
+    my_fuzzy = fuzzy_c_means(n_clusters = 3, m_fuzziness = 1.6, epsilon_stopping = 0.001)
     #my_fuzzy.fit(df_wine[['Malic acid','Color intensity','Alcalinity of ash','Flavanoids']].values)
     my_fuzzy.fit(df_wine[['Malic acid','Color intensity']].values)
 
